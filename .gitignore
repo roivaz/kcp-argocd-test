@@ -1,0 +1,7 @@
+.env
+.kcp/
+.kind/
+bin/
+tmp/
+**.kubeconfig
+token.txt

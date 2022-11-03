@@ -1,0 +1,6 @@
+url: https://api.github.com
+headers:
+  - name: Accept
+    value: application/vnd.github+json
+  - name: Authorization
+    value: Bearer $github-token

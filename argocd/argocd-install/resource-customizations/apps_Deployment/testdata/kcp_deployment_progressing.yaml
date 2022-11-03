@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    experimental.status.workload.kcp.dev/9RjfXZMR3zaPaHqLHgYnQ1uYDFcP1I8h3SYKXr: >-
+      {"availableReplicas":4,"conditions":[{"lastTransitionTime":"2022-10-06T12:22:40Z","lastUpdateTime":"2022-10-06T12:22:40Z",
+      "reason":"MinimumReplicasAvailable","status":"True","type":"Available"},
+      {"lastTransitionTime":"2022-10-06T11:02:18Z","lastUpdateTime":"2022-10-06T12:24:39Z",
+      "reason":"ReplicaSetUpdated","status":"True","type":"Progressing"}],"observedGeneration":3,"readyReplicas":4,"replicas":5,
+      "unavailableReplicas":1,"updatedReplicas":4}
+  generation: 16
+  name: test
+  namespace: test
+spec:
+  replicas: 4

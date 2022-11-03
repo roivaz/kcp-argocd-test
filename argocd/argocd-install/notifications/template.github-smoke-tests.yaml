@@ -1,0 +1,5 @@
+webhook:
+  github:
+    method: POST
+    path: repos/{{call .repo.FullNameByRepoURL .app.spec.source.repoURL}}/actions/workflows/test.yaml/dispatches
+    body: '{"ref":"main","inputs":{}}'

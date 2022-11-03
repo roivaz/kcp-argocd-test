@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trigger-smoke-tests
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd-ignore-unknown: "yes"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trigger-smoke-tests
+  template:
+    metadata:
+      labels:
+        app: trigger-smoke-tests
+    spec:
+      terminationGracePeriodSeconds: 0
+      initContainers:
+        - name: curl
+          image: curlimages/curl
+          env:
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: token
+                  name: github-token
+            - name: GH_ORG
+              value: roivaz
+            - name: GH_REPO
+              value: test-repo
+            - name: GH_WORKFLOW_ID
+              value: test.yaml
+          command:
+            - "sh"
+            - "-c"
+            - "curl -v -X POST -H \"Accept: application/vnd.github+json\" -H \"Authorization: Bearer ${GH_TOKEN}\" -d '{\"ref\":\"main\",\"inputs\":{}}' https://api.github.com/repos/${GH_ORG}/${GH_REPO}/actions/workflows/${GH_WORKFLOW_ID}/dispatches"
+      containers:
+        - name: sleep
+          image: curlimages/curl
+          command:
+            - "sh"
+            - "-c"
+            - "while true; do sleep 60; done"
