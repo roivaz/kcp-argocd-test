@@ -17,8 +17,8 @@ KCP_PLUGIN_BIN ?= $(LOCALBIN)/kubectl-kcp-plugin
 bin:
 	mkdir -p $(LOCALBIN)
 
-tmp:
-	mkdir -p tmp
+plugin-bin:
+	mkdir -p argocd-cmp-plugin/bin
 
 kcp: $(KCP_BIN)
 $(KCP_BIN): bin
@@ -39,27 +39,19 @@ kind: $(KIND) ## Download kind locally if necessary
 $(KIND):
 	test -s $(KIND) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
 
-KCP_ADMIN_KUBECONFIG ?= $(PWD)/.kcp/admin.kubeconfig
-KIND_ADMIN_KUBECONFIG ?= $(PWD)/.kind/kubeconfig
-start: tmp kcp kubectl-kcp-plugin kind
-	nohup kcp start > tmp/kcp.log 2>&1 &
-	mkdir -p .kind
-	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) $(KIND) create cluster --wait 5m --image kindest/node:v${K8S_VERSION}
-	KUBECONFIG=$(KCP_ADMIN_KUBECONFIG) kubectl kcp workspace create test --type universal --enter
-	KUBECONFIG=$(KCP_ADMIN_KUBECONFIG) kubectl kcp workload sync test \
-		--resources deployments.apps,pods \
-		--syncer-image ghcr.io/kcp-dev/kcp/syncer:v${KCP_VERSION} -o tmp/syncer-test.yaml
-	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) kubectl apply -f tmp/syncer-test.yaml
-	KUBECONFIG=$(KCP_ADMIN_KUBECONFIG) kubectl annotate --overwrite synctarget test \
-		featuregates.experimental.workload.kcp.dev/advancedscheduling='true'
+argocd-plugin-sockets:
+	mkdir -p /tmp/argocd-plugin-sockets && chmod 777 /tmp/argocd-plugin-sockets
+
+KIND_ADMIN_KUBECONFIG ?= $(PWD)/kubeconfig
+start: kind argocd-plugin-sockets
+	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) $(KIND) create cluster --wait 5m --config kind.yaml --image kindest/node:v${K8S_VERSION}
+	@make -s argocd-setup
 
 stop:
 	kind delete cluster --name=kind || true
-	pkill -TERM kcp || true
-	rm -rf .kcp
 
 clean:
-	rm -rf tmp bin .kind .kcp
+	rm -rf bin tmp kubeconfig
 
 ##@ Install argocd and configure the root:test workspace
 ARGOCD ?= $(LOCALBIN)/argocd
@@ -69,6 +61,19 @@ argocd: $(ARGOCD) ## Download argocd CLI locally if necessary
 $(ARGOCD):
 	curl -sL $(ARGOCD_DOWNLOAD_URL) -o $(ARGOCD)
 	chmod +x $(ARGOCD)
+
+ARGOCD_CMP_SERVER ?= $(LOCALBIN)/argocd-cmp-server
+ARGOCD_CMP_SERVER_VERSION ?= v2.4.12
+argocd-cmp-server: $(ARGOCD_CMP_SERVER)
+$(ARGOCD_CMP_SERVER):
+	git clone --branch $(ARGOCD_CMP_SERVER_VERSION) --depth=1 https://github.com/argoproj/argo-cd.git tmp/argo-cd || true
+	cd tmp/argo-cd && make argocd-all BIN_NAME=argocd-cmp-server DIST_DIR=../../bin
+
+CMP_PLUGIN ?= argocd-cmp-plugin/bin/avp
+cmp-plugin: $(CMP_PLUGIN)
+$(CMP_PLUGIN):
+	curl -sL "https://github.com/argoproj-labs/argocd-vault-plugin/releases/download/v1.11.0/argocd-vault-plugin_1.11.0_linux_amd64" -o $(CMP_PLUGIN)
+	chmod +x $(CMP_PLUGIN)
 
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 KUSTOMIZE_VERSION ?= v4.5.4
@@ -89,20 +94,27 @@ $(YQ):
 ARGOCD_PASSWD = $(shell kubectl --kubeconfig=$(KIND_ADMIN_KUBECONFIG) -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
 argocd-password:
 	@echo $(ARGOCD_PASSWD)
-argocd-login:
-	$(ARGOCD) login localhost:8080 --insecure --username admin --password $(ARGOCD_PASSWD)
 
 argocd-setup: export KUBECONFIG=$(KIND_ADMIN_KUBECONFIG)
-argocd-setup: kustomize
+argocd-setup: argocd kustomize
 	$(KUSTOMIZE) build argocd/argocd-install | kubectl apply -f -
 	kubectl -n argocd wait deployment argocd-server --for condition=Available=True --timeout=90s
 	kubectl port-forward svc/argocd-server -n argocd 8080:80 > /dev/null  2>&1 &
-	make argocd-login
-	$(ARGOCD) cluster add workspace.kcp.dev/current --name root:test --kubeconfig $(KCP_ADMIN_KUBECONFIG) --system-namespace default --yes
+	@echo -ne "\n\n\tConnect to ArgoCD UI in https://localhost:8080\n\n"
+	@echo -ne "\t\tUser: admin\n"
+	@echo -ne "\t\tPassword: "
+	@make -s argocd-password
+	@echo
+
+argocd-port-forward-stop:
 	pkill kubectl
 
-argocd-port-forward:
-	kubectl --kubeconfig $(KIND_ADMIN_KUBECONFIG) port-forward svc/argocd-server -n argocd 8080:80
-
-argocd-test-resource-customizations: kustomize yq argocd
-	cd argocd/argocd-install/resource-customizations && go test
+run-cmp-server: plugin-bin cmp-plugin argocd-cmp-server
+	docker run -ti --rm \
+		-v $(PWD)/argocd-cmp-plugin:/plugin \
+		-v $(PWD)/bin:/home/bin \
+		-v /tmp/argocd-plugin-sockets:/tmp/argocd-plugin-sockets \
+		-e ARGOCD_PLUGINSOCKFILEPATH=/tmp/argocd-plugin-sockets \
+		-u 999 \
+		busybox:latest \
+		/home/bin/argocd-cmp-server --config-dir-path /plugin --loglevel debug

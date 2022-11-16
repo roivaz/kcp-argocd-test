@@ -1,6 +1,0 @@
-- apiGroups:
-    - tenancy.kcp.dev
-  kinds:
-    - "*"
-  clusters:
-    - "*"

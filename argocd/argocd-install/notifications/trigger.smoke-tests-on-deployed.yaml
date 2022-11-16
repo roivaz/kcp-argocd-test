@@ -1,4 +1,0 @@
-- description: Application is synced and healthy. Triggered once per commit.
-  when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
-  send: [github-smoke-tests]
-  oncePer: app.status.operationState.syncResult.revision

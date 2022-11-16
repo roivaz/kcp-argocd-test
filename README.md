@@ -1,41 +1,5 @@
-# kcp-argocd-test
+# PoC for argocd CMP plugin dev environment
 
-## Start the kcp + argocd dev env
+Start kind with kcp. We won't be using kcp for this PoC though
 
-Create a local kcp environment:
-
-```bash
-make start
-```
-
-Deploy argocd into the physical cluster. This will install argocd directly into the physical kind cluster and deploy an application that points to the `test` kcp workspace:
-
-```bash
-make argocd-setup
-```
-
-Serve argocd-server in localhost:
-
-```bash
-make argocd-port-forward
-```
-
-Show the password for the argocd admin user:
-
-```bash
-make argocd-password
-```
-
-## Tear down the environment
-
-Stop kcp control plane and delete the kind cluster:
-
-```bash
-make stop
-```
-
-Remove all data:
-
-```bash
-make clean
-```
+`make start`
