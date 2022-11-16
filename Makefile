@@ -44,7 +44,7 @@ KIND_ADMIN_KUBECONFIG ?= $(PWD)/.kind/kubeconfig
 start: tmp kcp kubectl-kcp-plugin kind
 	nohup kcp start > tmp/kcp.log 2>&1 &
 	mkdir -p .kind
-	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) $(KIND) create cluster --wait 5m --config kind.yaml --image kindest/node:v${K8S_VERSION}
+	KUBECONFIG=$(KIND_ADMIN_KUBECONFIG) $(KIND) create cluster --wait 5m --image kindest/node:v${K8S_VERSION}
 	KUBECONFIG=$(KCP_ADMIN_KUBECONFIG) kubectl kcp workspace create test --type universal --enter
 	KUBECONFIG=$(KCP_ADMIN_KUBECONFIG) kubectl kcp workload sync test \
 		--resources deployments.apps,pods \
